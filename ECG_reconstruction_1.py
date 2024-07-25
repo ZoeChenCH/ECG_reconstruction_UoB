@@ -1,37 +1,45 @@
 import numpy as np
 import matplotlib.pylab as plt
 
-row_file = ('/Users/zhao-weichen/Zoe/ECG reconstruction/uqvitalsignsdata/case01/fulldata/uq_vsd_case01_fulldata_02.csv')
-row_file1 = ('/Users/zhao-weichen/Zoe/ECG reconstruction/uqvitalsignsdata/case02/uq_vsd_case02_fulldata_01.csv')
+row_file1 = ('/Users/zhao-weichen/Zoe/ECG reconstruction/uqvitalsignsdata/case01/fulldata/uq_vsd_case01_fulldata_02.csv')
+row_file = ('/Users/zhao-weichen/Zoe/ECG reconstruction/uqvitalsignsdata/case02/uq_vsd_case02_fulldata_01.csv')
 row_file2 = ('/Users/zhao-weichen/Zoe/ECG reconstruction/uqvitalsignsdata/case01/fulldata/uq_vsd_case01_fulldata_03.csv')
 fs = 100
 dur = 10 * fs
 wl = fs*1.5
 
-from pre_process import getData, create_segments
+from pre_process import getData, create_segments, recombine_peaks
 ECG1, PPG1 = getData(row_file)
 ECG2, PPG2 = getData(row_file1)
-ECG_test, PPG_test = getData(row_file2)
+ECG_test, PPG_test = getData(row_file1)
 
 ECG_segments1, PPG_segments1, PPG_WFset1, ECG_WFset1, peaks_set1, PPG_nWFset1, ECG_nWFset1, hp_set1, he_set1= create_segments(PPG1, ECG1, dur, wl)
-ECG_segments2, PPG_segments2, PPG_WFset2, ECG_WFset2, peaks_set2, PPG_nWFset2, ECG_nWFset2, hp_set2, he_set2= create_segments(PPG_test, ECG_test, dur, wl)
+ECG_segments2, PPG_segments2, PPG_WFset2, ECG_WFset2, peaks_set2, PPG_nWFset2, ECG_nWFset2, hp_set2, he_set2= create_segments(PPG2, ECG2, dur, wl)
 ECG_segmentsT, PPG_segmentsT, PPG_WFsetT, ECG_WFsetT, peaks_setT, PPG_nWFsetT, ECG_nWFsetT, hp_setT, he_setT= create_segments(PPG_test, ECG_test, dur, wl)
 
-PPG_WFset = PPG_WFset1 + PPG_WFset2
-ECG_WFset = ECG_WFset1 + ECG_WFset2
-peaks_set = peaks_set1 + peaks_set2
-PPG_nWFset = PPG_nWFset1 + PPG_nWFset2
-ECG_nWFset = ECG_nWFset1 + ECG_nWFset2
-hp_set = hp_set1 + hp_set2
-he_set = he_set1 + he_set2
+PPG_WFset = PPG_WFset2
+ECG_WFset = ECG_WFset2
+peaks_set = peaks_set2
+PPG_nWFset = PPG_nWFset2
+ECG_nWFset = ECG_nWFset2
+hp_set = hp_set2
+he_set = he_set2
+
+ppg_temp = np.array(PPG_segments1[0])
+x = np.arange(len(ppg_temp))/100
+p = peaks_set1[0]
+new_ppg = recombine_peaks(p, ppg_temp, PPG_WFset1[0])
 
 from torch.utils.data import Dataset, DataLoader, random_split
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from CNNmodel import CNNModel,PPGtoECGDataset
+from itertools import chain
 
 #dataset = PPGtoECGDataset(PPG_segments, ECG_segments)
+PPG_nWFset = list(chain.from_iterable(PPG_nWFset))
+ECG_nWFset = list(chain.from_iterable(ECG_nWFset))
 dataset = PPGtoECGDataset(PPG_nWFset, ECG_nWFset)
 train_size = int(0.8*len(dataset))
 test_size = len(dataset) - train_size
@@ -87,8 +95,8 @@ sim1_ECG_test = []
 tester = [101, 102, 103]
 
 for i in tester:
-    test_ppg_segment = PPG_nWFsetT[i]
-    test_ecg_segment = ECG_nWFsetT[i]
+    test_ppg_segment = PPG_nWFset[i]
+    test_ecg_segment = ECG_nWFset[i]
     test_ppg_segment = torch.tensor(test_ppg_segment).unsqueeze(0).unsqueeze(1)
 
     with torch.no_grad():
@@ -103,15 +111,15 @@ for i in tester:
     plt.xlabel('Time (sec)', fontsize = 14)
     plt.title('PPG', fontsize = 20)
     plt.subplot(2, 1, 2)
-    #plt.plot(x2, test_ecg_segment, label = 'Normalized ECG')
+    plt.plot(x2, test_ecg_segment, label = 'Normalized ECG')
     plt.plot(x2, simulated_ecg_segment, label = 'Simulated ECG')
-    plt.plot(x2, test_ecg_segment-np.min(test_ecg_segment), label='normalized Actual ECG')
-    plt.plot(x2, ECG_WFsetT[i], label='Actual ECG')
+    #plt.plot(x2, test_ecg_segment-np.min(test_ecg_segment), label='normalized Actual ECG')
+    plt.plot(x2, ECG_WFset[i], label='Actual ECG')
     #plt.ylim(-0.45,1)
     plt.xlabel('Time (sec)', fontsize = 14)
     plt.title('ECG', fontsize = 20)
     plt.legend(fontsize='16')
-    #plt.show()
+    plt.show()
 
     # plt.savefig('test.jpg')
 
