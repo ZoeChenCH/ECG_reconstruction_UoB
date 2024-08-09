@@ -2,38 +2,37 @@ import torch
 import torch.nn as nn
 import numpy as np
 from torch.utils.data import Dataset
-class nECGtoECGDataset(Dataset):
-    def __init__(self,ECG_simulated1, ECG_WFs):
-        self.ECG_simulated1 = ECG_simulated1
-        self.ECG_WFs = ECG_WFs
-
+class ECGsegmentDataset(Dataset):
+    def __init__(self,sim_ecg_10s, ECG_segments):
+        self.sim_ecg_10s = sim_ecg_10s
+        self.ECG_segments = ECG_segments
     def __len__(self):
-        return len(self.ECG_simulated1)
+        return len(self.sim_ecg_10s)
 
     def __getitem__(self, idx):
-        ECG_sim = np.array(self.ECG_simulated1[idx]).astype(np.float32)
-        ECG_WFs = np.array(self.ECG_WFs[idx]).astype(np.float32)
-        return ECG_sim, ECG_WFs
+        sim_ecg_10s = np.array(self.sim_ecg_10s[idx]).astype(np.float32)
+        ECG_segments = np.array(self.ECG_segments[idx]).astype(np.float32)
+        return sim_ecg_10s, ECG_segments
 
-class CNN2Model(nn.Module):
+class CNN3Model(nn.Module):
     def __init__(self):
-        super(CNN2Model, self).__init__()
-        self.conv1 = nn.Conv1d(1, 16, kernel_size=5, stride=1, padding=2)
-        self.conv2 = nn.Conv1d(16, 32, kernel_size=5, stride=1, padding=2)
-        self.conv3 = nn.Conv1d(32, 64, kernel_size=5, stride=1, padding=2)
+        super(CNN3Model, self).__init__()
+        self.conv1 = nn.Conv1d(1, 64, kernel_size=5, stride=1, padding=2)
+        self.conv2 = nn.Conv1d(64, 256, kernel_size=5, stride=1, padding=2)
+        self.conv3 = nn.Conv1d(256, 512, kernel_size=5, stride=1, padding=2)
         self.pool = nn.MaxPool1d(kernel_size=2, stride=2, padding=0)
         self.dropout = nn.Dropout(0.5)
         self.relu = nn.ReLU()
 
         self._initialize_fc()
 
-        self.fc1 = nn.Linear(self.fc_input_dim, 52)
-        self.fc2 = nn.Linear(52, 100)
+        self.fc1 = nn.Linear(self.fc_input_dim, 512)
+        self.fc2 = nn.Linear(512, 500)
 
 
     def _initialize_fc(self):
         with torch.no_grad():
-            x = torch.zeros(1, 1, 100)
+            x = torch.zeros(1, 1, 500)
             x = self.pool(self.relu(self.conv1(x)))
             x = self.pool(self.relu(self.conv2(x)))
             x = self.pool(self.relu(self.conv3(x)))

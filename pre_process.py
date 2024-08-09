@@ -1,6 +1,5 @@
 import csv
 import numpy as np
-from scipy.signal import butter, lfilter
 from scipy.signal import find_peaks
 import pandas as pd
 import matplotlib.pylab as plt
@@ -33,12 +32,18 @@ def getData(row_file):
     PPG_f = PPG_f
     return ECG_f, PPG_f
 
-def butter_bandpass(lowcut, highcut, fs, order=5):
-    return butter(order, [lowcut, highcut], fs=fs, btype='band')
-
+from scipy.signal import butter, filtfilt, resample
 def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
-    b, a = butter_bandpass(lowcut, highcut, fs, order=order)
-    y = lfilter(b, a, data)
+    new_f = 1000
+    num_samples_new = int(new_f * len(data) / float(fs))
+    signal_resampled = resample(data, num_samples_new)
+
+    nyquist = 0.5 * new_f
+    low = lowcut / nyquist
+    high = highcut / nyquist
+    b, a = butter(order, [low, high], btype='band')
+    y = filtfilt(b, a, signal_resampled)
+    y = resample(y, len(data))
     return y
 
 def PPG_findPeaks(PPG_seg):
@@ -87,6 +92,8 @@ def create_segments(data_PPG, data_ECG, segment_length, waveform_length):
     peaks_set = []
     hp_set = []
     he_set = []
+    segm_id = []
+    id = 0
     x = np.arange(segment_length) / 100
     for i in range(0, len(data_PPG), segment_length):
         if i + segment_length <= len(data_PPG):
@@ -96,10 +103,22 @@ def create_segments(data_PPG, data_ECG, segment_length, waveform_length):
             ECG_segments.append(ECG_segment)
             peaks_idx= PPG_findPeaks(PPG_segment)
 
-            PPG_oneBeat = []
-            ECG_oneBeat = []
-            PPG_oneBeatn = []
-            ECG_oneBeatn = []
+            if 0:
+                x1 = np.arange(len(PPG_segment)) / 100
+                plt.figure(figsize=(15, 15))
+                plt.subplot(2, 1, 1)
+                plt.plot(x1, ECG_segment, 'k', linewidth=3.0)
+                plt.xlabel('Time (sec)', fontsize=24)
+                plt.title('electrocardiogram (ECG)', fontsize=28)
+                plt.ylabel('Amplitude (mV)', fontsize=24)
+                plt.subplot(2, 1, 2)
+                plt.plot(x1, PPG_segment, 'k', linewidth=3.0)
+                plt.xlabel('Time (sec)', fontsize=24)
+                plt.title('photoplethysmography  (PPG)', fontsize=28)
+                plt.ylabel('Amplitude a.u.', fontsize=24)
+                plt.legend(fontsize='16')
+                plt.show()
+
             d_peak = []
             for peak in peaks_idx:
                 if peak - int(waveform_length * 0.8) >=0 and peak + int(waveform_length * 0.2) < len(PPG_segment):
@@ -107,36 +126,76 @@ def create_segments(data_PPG, data_ECG, segment_length, waveform_length):
                     h_PPG = np.max(PPG_WF)-np.min(PPG_WF)
                     PPG_nWF = (PPG_WF-np.min(PPG_WF))/(h_PPG)
                     PPG_nWF = PPG_nWF.astype(np.float32)
-                    PPG_oneBeat.append(PPG_WF)
-                    PPG_oneBeatn.append(PPG_nWF)
+                    PPG_WFset.append(PPG_WF)
+                    PPG_nWFset.append(PPG_nWF)
                     hp_set.append(h_PPG.astype(np.float32))
-                    ECG_WF = ECG_segment[peak - int(waveform_length * 0.8):peak - int(waveform_length * 0.8)+fs]
+                    ECG_WF = ECG_segment[peak - int(waveform_length * 0.8):peak - int(waveform_length * 0.8) + fs]
                     h_ECG = np.max(ECG_WF) - np.min(ECG_WF)
                     ECG_nWF =(ECG_WF-np.min(ECG_WF))/(h_ECG)
                     ECG_nWF = ECG_nWF.astype(np.float32)
-                    ECG_oneBeat.append(ECG_WF)
-                    ECG_oneBeatn.append(ECG_nWF)
+                    ECG_WFset.append(ECG_WF)
+                    ECG_nWFset.append(ECG_nWF)
                     he_set.append(h_ECG.astype(np.float32))
+                    segm_id.append(id)
+                    peaks_set.append(peak)
 
-                else:
-                    d_peak.append(peak)
-            peaks_idx = np.setdiff1d(peaks_idx, d_peak)
-            peaks_set.append(peaks_idx)
-            PPG_WFset.append(PPG_oneBeat)
-            ECG_WFset.append(ECG_oneBeat)
-            PPG_nWFset.append(PPG_oneBeatn)
-            ECG_nWFset.append(ECG_oneBeatn)
-    return ECG_segments, PPG_segments, PPG_WFset, ECG_WFset, peaks_set, PPG_nWFset, ECG_nWFset, hp_set, he_set
+                    '''
+                    x1 = np.arange(len(PPG_WF)) / 100
+                    x2 = np.arange(len(ECG_WF)) / 100
+                    plt.figure(figsize=(15, 15))
+                    plt.subplot(2, 1, 1)
+                    plt.plot(x2, ECG_WF, 'k', linewidth=3.0)
+                    plt.xlabel('Time (sec)', fontsize=24)
+                    plt.title('electrocardiogram (ECG)', fontsize=28)
+                    plt.ylabel('Amplitude (mV)', fontsize=24)
+                    plt.subplot(2, 1, 2)
+                    plt.plot(x1, PPG_WF, 'k', linewidth=3.0)
+                    plt.xlabel('Time (sec)', fontsize=24)
+                    plt.title('photoplethysmography (PPG)', fontsize=28)
+                    plt.ylabel('Amplitude a.u.', fontsize=24)
+                    plt.legend(fontsize='16')
+                    plt.show()
+                    '''
 
-def recombine_peaks(peaks, signal, peaks_set):
+                #else:
+                    #d_peak.append(peak)
+            #peaks_idx = np.setdiff1d(peaks_idx, d_peak)
+            #peaks_set.append(peaks_idx)
+            id += 1
+    return ECG_segments, PPG_segments, PPG_WFset, ECG_WFset, peaks_set, PPG_nWFset, ECG_nWFset, hp_set, he_set, segm_id
+
+def recombine_peaks(peaks, signal, peaks_set,pic):
     x = np.arange(len(signal))/100
     matrix = np.full((len(peaks), len(signal)), np.nan)
     for i in range(0,len(peaks)):
-        matrix[i,peaks[i]-int(150*0.8):peaks[i]+int(150*0.2)] = peaks_set[i]
+        matrix[i,peaks[i]-int(150*0.8):peaks[i]-int(150*0.8)+len(peaks_set[0])] = peaks_set[i]
     rebuild_signal = np.nanmean(matrix, axis=0)
-    fig = plt.figure()
-    plt.plot(x, signal)
-    plt.plot(x[peaks], signal[peaks],'o')
-    plt.plot(x, rebuild_signal)
-    plt.show()
-    return rebuild_signal
+    rebuild_signal_2 = rebuild_signal.copy()
+    avg_peak = np.nanmean(peaks_set, axis=0)
+    current_nan_length = 0
+    for idx, value in enumerate(rebuild_signal_2):
+        if np.isnan(value):
+            current_nan_length += 1
+            if current_nan_length > 100:
+                rebuild_signal_2[idx-100:idx] = avg_peak
+                current_nan_length = 0
+        else:
+            current_nan_length = 0
+
+    rebuild_signal = pd.Series(rebuild_signal)
+    rebuild_signal = rebuild_signal.ffill()
+    rebuild_signal = rebuild_signal.bfill()
+    rebuild_signal = rebuild_signal.interpolate(method='polynomial', order=2).tolist()
+    rebuild_signal_2 = pd.Series(rebuild_signal_2)
+    rebuild_signal_2 = rebuild_signal_2.ffill()
+    rebuild_signal_2 = rebuild_signal_2.bfill()
+    rebuild_signal_2 = rebuild_signal_2.interpolate(method='polynomial', order=2).tolist()
+
+    if pic:
+        plt.figure()
+        plt.plot(x, rebuild_signal, 'k', linewidth = 3, label = 'interpolated signal')
+        plt.plot(x, rebuild_signal_2, 'r', linewidth =1, label='add average beat')
+        plt.plot(x, signal, 'b--', linewidth=1, label='Actual ECG')
+        plt.show()
+    return rebuild_signal_2
+
